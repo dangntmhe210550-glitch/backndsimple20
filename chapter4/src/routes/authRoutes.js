@@ -5,7 +5,7 @@ import db from '../db.js'
 
 const router = express.Router()
 
-router.post('/register', (req, res) => {
+router.post('/register', async (req, res) => {
     const { username , password } = req.body
     // luu ten ng dung va encrypt passwd
     const hashedPassword = bcrypt.hashSync(password, 8)
@@ -13,13 +13,21 @@ router.post('/register', (req, res) => {
 
     //them user vao db
     try {
-        const insertUser = db.prepare(`INSERT INTO users (username, password) VALUES (?, ?)`)
-        const result = insertUser.run(username, hashedPassword)
+        const user = await prisma.user.create({
+            data: {
+                username,
+                password: hashedPassword
+            }
+        })
+        const defaultTodo = `Hello :) add ur first to do`
 
-        //add their first todo
-        const defaultTodo = `Hello :) Add your first todo`
-        const insertTodo = db.prepare(`INSERT INTO todos (user_id, task) VALUES (?, ?)`)
-        insertTodo.run(result.lastInsertRowid, defaultTodo)
+        await prisma.todo.create({
+            data: {
+                task: defaultTodo,
+                userId : user.id
+            }
+        })
+
 
         //create token
         const token = jwt.sign({ id: result.lastInsertRowid }, process.env.JWT_SECRET, {expiresIn: '24h'})
@@ -31,7 +39,7 @@ router.post('/register', (req, res) => {
     }
 })
 
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
 
     //khi login cta co email, va cbi tim passwd associated vs email do
     //nhung no bi encrypt roi, gio cta lms de so sanh vs cai mat khau ma ho ms nhap
@@ -40,8 +48,12 @@ router.post('/login', (req, res) => {
     const { username, password} = req.body
 
     try {
-        const getUser = db.prepare('SELECT * FROM users WHERE username = ?')
-        const user = getUser(username)
+        const user = await prisma.user.findUnique({
+            where:{
+                username : username
+            }
+        })
+
 
         if (!user) { return res.status(404).send({ message: "User not found"}) }
 
